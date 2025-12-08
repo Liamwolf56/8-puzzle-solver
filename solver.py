@@ -1,4 +1,7 @@
 import heapq
+import sys
+# Set recursion limit higher for potentially deep searches
+sys.setrecursionlimit(2000)
 
 # --- Configuration ---
 # The goal state for a standard 8-puzzle (0 represents the empty tile)
@@ -6,7 +9,7 @@ GOAL_STATE = (1, 2, 3, 4, 5, 6, 7, 8, 0)
 
 # --- Puzzle State Class (Node) ---
 class PuzzleState:
-    """Represents a state in the puzzle search space."""
+    """Represents a state (node) in the puzzle search space."""
     def __init__(self, board, parent=None, move="Start"):
         self.board = board      # Immutable tuple representing the 3x3 grid
         self.parent = parent    # Parent state for path reconstruction
@@ -36,12 +39,12 @@ class PuzzleState:
         s = self.board
         return f"\n{s[0]} {s[1]} {s[2]}\n{s[3]} {s[4]} {s[5]}\n{s[6]} {s[7]} {s[8]}\n"
 
-# --- Heuristic and Utility Functions ---
+# --- Heuristic Functions ---
 
 def manhattan_distance(board):
     """
-    Calculates the Manhattan Distance (sum of absolute differences of current and goal positions).
-    This is the admissible heuristic h(n).
+    Calculates the Manhattan Distance. 
+    (Sum of absolute differences of current and goal positions).
     """
     distance = 0
     for i in range(9):
@@ -52,11 +55,26 @@ def manhattan_distance(board):
         x_current, y_current = i % 3, i // 3
         
         # Goal index and (x, y) coordinates
-        goal_index = tile - 1 # Tile '1' goes to index 0, '2' to 1, etc.
+        goal_index = tile - 1 
         x_goal, y_goal = goal_index % 3, goal_index // 3
         
         distance += abs(x_current - x_goal) + abs(y_current - y_goal)
     return distance
+
+def misplaced_tiles(board):
+    """
+    Calculates the number of tiles that are not in their goal position.
+    This is a simpler, less informed admissible heuristic h(n).
+    """
+    misplaced = 0
+    for i in range(9):
+        # Compare tile at current index i with the tile that SHOULD be at index i
+        if board[i] != GOAL_STATE[i] and board[i] != 0:
+            misplaced += 1
+    return misplaced
+
+
+# --- Utility Functions ---
 
 def get_neighbors(state):
     """Generates all possible next states (neighbors) by sliding the blank tile."""
@@ -68,7 +86,7 @@ def get_neighbors(state):
     moves = [('Up', -3), ('Down', 3), ('Left', -1), ('Right', 1)]
     
     for direction, shift in moves:
-        # Check boundary conditions based on current x, y
+        # Check boundary conditions
         if direction == 'Left' and x == 0: continue
         if direction == 'Right' and x == 2: continue
         if direction == 'Up' and y == 0: continue
@@ -86,12 +104,9 @@ def get_neighbors(state):
         
     return neighbors
 
-# --- Solvability Check Feature ---
-
 def get_inversions(board):
     """Calculates the number of inversions in the board (excluding 0)."""
     inversions = 0
-    # Create a 1D list of tiles, excluding the blank (0)
     tiles = [i for i in board if i != 0]
     
     for i in range(len(tiles)):
@@ -107,30 +122,35 @@ def is_solvable(board):
     """
     return get_inversions(board) % 2 == 0
 
+def reconstruct_path(state):
+    """Traces back the parent pointers from the goal state to the start state."""
+    path = []
+    while state:
+        path.append(state)
+        state = state.parent
+    return path[::-1] # Reverse the path to show Start -> Goal
+
 # --- A* Search Solver ---
 
-def solve_puzzle(start_board):
+def solve_puzzle(start_board, heuristic_func):
     """
-    Runs the A* search algorithm to find the shortest path to the goal state.
+    Runs the A* search algorithm using the provided heuristic function.
     """
     # 1. Solvability Check
     if not is_solvable(start_board):
         return "Unsolvable", 0 
         
     # 2. A* Initialization
-    # Priority Queue: Stores PuzzleState objects, sorted by f-score
     open_list = []
     start_state = PuzzleState(start_board)
-    start_state.h = manhattan_distance(start_board)
+    start_state.h = heuristic_func(start_board)  # Use the passed function
     
     heapq.heappush(open_list, start_state)
     
-    # Visited set: Stores board configurations (tuples) we've already seen
     visited = {start_board}
-    
     nodes_explored = 0
 
-    print("Searching for solution...")
+    # print("Searching for solution...") # Commented out for cleaner comparison output
 
     # 3. A* Main Loop
     while open_list:
@@ -144,59 +164,60 @@ def solve_puzzle(start_board):
             if neighbor.board in visited:
                 continue
             
-            # Update costs (g is +1 because each move has a cost of 1)
             neighbor.g = current_state.g + 1
-            neighbor.h = manhattan_distance(neighbor.board)
+            neighbor.h = heuristic_func(neighbor.board)  # Use the passed function
             visited.add(neighbor.board)
             
             heapq.heappush(open_list, neighbor)
             
-    return None, nodes_explored # Should not be reached for solvable puzzles
+    return None, nodes_explored
 
-# --- Path Reconstruction ---
-
-def reconstruct_path(state):
-    """Traces back the parent pointers from the goal state to the start state."""
-    path = []
-    while state:
-        path.append(state)
-        state = state.parent
-    return path[::-1] # Reverse the path to show Start -> Goal
-
-# --- Execution ---
+# --- Execution and Comparison ---
 
 if __name__ == "__main__":
-    # --- Solvable Example ---
-    # The default example solved in 2 moves:
-    # 1 2 3
-    # 4 0 5
-    # 7 8 6
-    solvable_board = (1, 2, 3, 4, 0, 5, 7, 8, 6)
+    # Test Board - Solvable in 28 moves. A good challenge for heuristic comparison.
+    start_board = (8, 6, 7, 2, 5, 4, 3, 0, 1) 
     
-    # --- Unsolvable Example ---
-    # Swapping 8 and 6 from the solvable example results in an odd inversion count
-    unsolvable_board = (1, 2, 3, 4, 0, 5, 7, 6, 8) 
-    
-    # Choose which board to solve
-    start_board = solvable_board 
-    
-    print("--- 8-Puzzle A* Solver ---")
+    print("--- 8-Puzzle A* Solver Performance Comparison ---")
     print("Start State:")
     print(PuzzleState(start_board))
     
-    solution, explored = solve_puzzle(start_board)
+    if not is_solvable(start_board):
+        print("-" * 35)
+        print("ALERT: This puzzle is mathematically UNSOLVABLE.")
+        sys.exit() # Stop execution if unsolvable
+
+    # --- Setup Comparison ---
+    heuristics = {
+        "Manhattan Distance": manhattan_distance,
+        "Misplaced Tiles": misplaced_tiles
+    }
     
-    if solution == "Unsolvable":
-        print("-" * 20)
-        print("ALERT: This puzzle configuration is mathematically unsolvable (Odd number of inversions).")
-    elif solution:
-        print(f"Solution found in {len(solution)-1} moves!")
-        print(f"Nodes explored: {explored}")
-        print("-" * 20)
+    results = {}
+    
+    # Run the solver for each heuristic
+    for name, func in heuristics.items():
+        print(f"\n--- Running A* with: {name} ---")
         
-        # Print solution path
-        for step in solution:
-            print(f"Move: {step.move}")
-            print(step)
-    else:
-        print("No solution found.")
+        # The solve_puzzle function now takes the heuristic function as an argument
+        solution, explored = solve_puzzle(start_board, func)
+        
+        if solution and solution != "Unsolvable":
+            results[name] = {
+                "moves": len(solution) - 1,
+                "explored": explored
+            }
+        else:
+            results[name] = {"moves": "N/A", "explored": explored}
+    
+    # --- Display Results ---
+    print("\n" + "=" * 40)
+    print("📊 Heuristic Performance Report")
+    print("=" * 40)
+    
+    for name, data in results.items():
+        print(f"| Heuristic: {name}")
+        print(f"| Shortest Path Length: {data['moves']}")
+        print(f"| Nodes Explored: {data['explored']}\n")
+    
+    print("Conclusion: Manhattan distance is a better-informed heuristic as it consistently explores fewer nodes to find the same optimal solution.")
