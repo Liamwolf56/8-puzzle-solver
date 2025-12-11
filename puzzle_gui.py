@@ -1,20 +1,20 @@
-# puzzle_gui.py
+# puzzle_gui.py (UPDATED for PDB)
 
 import pygame
 import sys
 import random
-# Import core logic from solver.py
+# Import core logic and the PDB loading function
 try:
-    from solver import PuzzleState, manhattan_distance, misplaced_tiles, solve_puzzle, is_solvable, GOAL_STATE
+    from solver import PuzzleState, solve_puzzle, is_solvable, GOAL_STATE, load_pdb
 except ImportError:
-    print("FATAL: Cannot import solver logic. Ensure 'solver.py' is in the same directory and complete.")
+    print("FATAL: Cannot import solver logic. Ensure 'solver.py' is in the same directory.")
     sys.exit()
 
 # --- Pygame Setup ---
 pygame.init()
 WIDTH, HEIGHT = 600, 780  
 SCREEN = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("8-Puzzle Solver Interactive")
+pygame.display.set_caption("8-Puzzle Solver Interactive (PDB)")
 
 # --- Colors and Fonts ---
 WHITE = (255, 255, 255)
@@ -38,17 +38,16 @@ solving_path = None
 path_index = 0
 solving = False
 solving_results = None 
-# Hard-code the best heuristic for internal use
-current_heuristic = "Manhattan Distance" 
+current_heuristic = "Manhattan Distance" # Legacy variable, now hardcoded to PDB/Manhattan
 
 # --- Button Configuration (Fixed Positions) ---
 BUTTON_Y = 610
 BUTTON_H = 50
 BUTTON_W = 160
 
-SHUFFLE_RECT = pygame.Rect(40, BUTTON_Y, BUTTON_W, BUTTON_H)  # Left
-ACTION_RECT = pygame.Rect(220, BUTTON_Y, BUTTON_W, BUTTON_H) # Center (Dynamic: SOLVE / NEXT STEP)
-RESET_RECT = pygame.Rect(400, BUTTON_Y, BUTTON_W, BUTTON_H)  # Right (Dynamic: RESET)
+SHUFFLE_RECT = pygame.Rect(40, BUTTON_Y, BUTTON_W, BUTTON_H) 
+ACTION_RECT = pygame.Rect(220, BUTTON_Y, BUTTON_W, BUTTON_H)
+RESET_RECT = pygame.Rect(400, BUTTON_Y, BUTTON_W, BUTTON_H)
 
 # Info Label Position
 INFO_LABEL_RECT = pygame.Rect(10, HEIGHT - 70, WIDTH - 20, 30)
@@ -67,13 +66,11 @@ def draw_board(screen, board):
             x = j * TILE_SIZE
             y = i * TILE_SIZE
             
-            # Draw the tile rectangle
             tile_rect = pygame.Rect(x, y, TILE_SIZE, TILE_SIZE)
             pygame.draw.rect(screen, DARK_GRAY, tile_rect, 0)
-            pygame.draw.rect(screen, BLACK, tile_rect, 3) # Border
+            pygame.draw.rect(screen, BLACK, tile_rect, 3) 
             
             if tile_value != 0:
-                # Draw the number
                 text_surface = FONT.render(str(tile_value), True, WHITE)
                 text_rect = text_surface.get_rect(center=tile_rect.center)
                 screen.blit(text_surface, text_rect)
@@ -86,11 +83,10 @@ def draw_button(screen, rect, text, color):
     screen.blit(text_surface, text_rect)
 
 def draw_info_label(screen):
-    """Draws a single label showing the active heuristic mode."""
+    """Draws a single label showing the active heuristic mode (PDB)."""
     
-    mode_text = SMALL_FONT.render("Mode: Puzzle Solver (H: Manhattan Distance)", True, BLACK)
+    mode_text = SMALL_FONT.render("Mode: Puzzle Solver (H: Pattern Database)", True, BLACK)
     
-    # Center the label horizontally at the designated info area
     mode_rect = mode_text.get_rect(center=INFO_LABEL_RECT.center)
     screen.blit(mode_text, mode_rect)
 
@@ -100,11 +96,11 @@ def draw_scoreboard(screen):
     if not solving_results:
         return
 
-    # Draw a results box
     box_rect = pygame.Rect(50, HEIGHT - 110, WIDTH - 100, 70)
     pygame.draw.rect(screen, DARK_GRAY, box_rect, 0, 10)
     
-    heuristic_text = SMALL_FONT.render(f"H: {solving_results['heuristic']}", True, WHITE)
+    # Display PDB as the heuristic
+    heuristic_text = SMALL_FONT.render(f"H: Pattern Database", True, WHITE)
     moves_text = SMALL_FONT.render(f"Moves: {solving_results['moves']}", True, WHITE)
     explored_text = SMALL_FONT.render(f"Nodes Explored: {solving_results['explored']}", True, WHITE)
 
@@ -133,14 +129,12 @@ def slide_tile(board, r1, c1):
     dr = abs(r1 - r_blank)
     dc = abs(c1 - c_blank)
     
-    # If adjacent (one distance unit, not diagonal)
     if (dr == 1 and dc == 0) or (dr == 0 and dc == 1):
-        # Perform the swap
         board_list[current_index], board_list[blank_index] = \
             board_list[blank_index], board_list[current_index]
         return tuple(board_list)
         
-    return board # No change
+    return board
 
 def shuffle_board():
     """Generates a random, guaranteed solvable board."""
@@ -152,14 +146,12 @@ def shuffle_board():
             return temp_board
 
 def solve_and_prepare_path(board):
-    """Triggers the A* solver using the best available heuristic (Manhattan)."""
+    """Triggers the A* solver using the PDB heuristic."""
     
-    # HARD-CODED: Use the superior Manhattan Distance heuristic for performance.
-    heuristic_func = manhattan_distance 
+    print("Solver initiated (Mode: PDB Solver)...")
     
-    print("Solver initiated (Mode: Puzzle Solver)...")
-    
-    solution_states, explored = solve_puzzle(board, heuristic_func)
+    # Call the solver without the heuristic argument (it's hardcoded to PDB)
+    solution_states, explored = solve_puzzle(board) 
     
     if solution_states == "Unsolvable":
         return None, None
@@ -167,17 +159,16 @@ def solve_and_prepare_path(board):
         moves = len(solution_states) - 1
         print(f"Solution found in {moves} moves. Nodes Explored: {explored}")
         
-        # Report Manhattan Distance as the heuristic used
-        results = {"moves": moves, "explored": explored, "heuristic": "Manhattan Distance"}
+        # Report Pattern Database as the heuristic used
+        results = {"moves": moves, "explored": explored, "heuristic": "Pattern Database"}
         return solution_states, results
     return None, None
 
 # --- Main Game Loop ---
 def main():
-    global current_board_tuple, solving, solving_path, path_index, solving_results, current_heuristic
+    global current_board_tuple, solving, solving_path, path_index, solving_results
     clock = pygame.time.Clock()
     
-    # Start with a randomly shuffled, solvable board
     current_board_tuple = shuffle_board()
     solving = False
 
@@ -202,9 +193,7 @@ def main():
                         if current_board_tuple == GOAL_STATE:
                             print("Puzzle Solved Manually!")
 
-                # --- Button Clicks (Fixed Positions) ---
-                
-                # SHUFFLE (Always active)
+                # SHUFFLE
                 if SHUFFLE_RECT.collidepoint(pos):
                     solving = False
                     solving_results = None
@@ -212,17 +201,16 @@ def main():
                     path_index = 0
                     current_board_tuple = shuffle_board()
                 
-                # Center Button (ACTION/NEXT STEP)
+                # ACTION (SOLVE / NEXT STEP)
                 elif ACTION_RECT.collidepoint(pos):
                     if not solving:
-                        # Not solving -> Run SOLVE
                         solving_path, results = solve_and_prepare_path(current_board_tuple)
                         if solving_path:
                             solving = True
                             solving_results = results
                             path_index = 0
                     else:
-                        # Solving -> NEXT STEP
+                        # NEXT STEP
                         if path_index < len(solving_path):
                             current_board_tuple = solving_path[path_index].board
                             path_index += 1
@@ -230,12 +218,11 @@ def main():
                                  solving = False
                                  print("Solution Animation Complete (Stepped through)!")
                         
-                # RESET Button (Only active when solving)
+                # RESET
                 elif solving and RESET_RECT.collidepoint(pos):
-                    # Stop solving mode and reset to the state before solving started
                     solving = False
                     if solving_path:
-                        current_board_tuple = solving_path[0].board # Reset to start state of the solve path
+                        current_board_tuple = solving_path[0].board
                         solving_path = None
                         path_index = 0
                         print("Solving visualization reset.")
@@ -243,24 +230,20 @@ def main():
         # --- Drawing ---
         draw_board(SCREEN, current_board_tuple)
         
-        # Heuristic/Mode Label and Scoreboard
         draw_info_label(SCREEN) 
         draw_scoreboard(SCREEN)
         
-        # 1. SHUFFLE (Always visible)
+        # Buttons
         draw_button(SCREEN, SHUFFLE_RECT, "SHUFFLE", DARK_GRAY)
 
-        # 2. ACTION Button (Dynamic: SOLVE or NEXT STEP)
         if not solving:
             draw_button(SCREEN, ACTION_RECT, "SOLVE (A*)", GREEN)
         else:
-            # Display NEXT STEP or FINISHED
             if path_index < len(solving_path):
                  draw_button(SCREEN, ACTION_RECT, "NEXT STEP", GREEN)
             else:
                  draw_button(SCREEN, ACTION_RECT, "FINISHED", DARK_GRAY)
 
-        # 3. RESET Button (Only visible when solving)
         if solving:
             draw_button(SCREEN, RESET_RECT, "STOP/RESET", RED)
 
@@ -268,7 +251,7 @@ def main():
         if current_board_tuple == GOAL_STATE:
             status_text = FONT.render("SOLVED!", True, GREEN)
         elif not solving and solving_results:
-             status_text = FONT.render("Performance Metrics Above", True, BLACK)
+             status_text = FONT.render("PDB Metrics Above", True, BLACK)
         else:
             status_text = FONT.render("Ready to Play or Solve", True, BLACK)
 
@@ -279,11 +262,12 @@ def main():
         clock.tick(60)
 
 if __name__ == '__main__':
-    # Add a check to ensure the solver module is accessible before main starts
+    # Load the PDB file before starting the main loop!
     try:
+        load_pdb()
         main()
     except Exception as e:
         print(f"An error occurred: {e}")
-        print("Please check that 'solver.py' is in the same directory and contains all required functions.")
+        print("Ensure 'pdb_generator.py' was run and 'pdb_6.dat' exists.")
         pygame.quit()
         sys.exit()
